@@ -1,13 +1,13 @@
 package adsp
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
-	"path/filepath"
 
 	"github.com/Arafatk/glot"
+	"github.com/mattn/go-jsonpointer"
 	"github.com/uga-rosa/umx/internal/fs"
-	"github.com/uga-rosa/umx/internal/set"
 	"github.com/urfave/cli/v2"
 )
 
@@ -15,67 +15,133 @@ const AdsRegion = 0.7
 
 func Cmd(c *cli.Context) error {
 	input := c.String("input")
-	directory := c.String("directory")
 	number := c.Int("number")
 
-	aus, boxz := fs.ReadAUSZ(input)
-	pegOFiles := fs.GetFiles(directory)
-	adsOnSteps := make(map[string][]bool)
-	var numSteps int
-	for i, file := range pegOFiles {
-		pegO := fs.ReadPEGO(file)
-		if i == 0 {
-			numSteps = len(pegO)
-		} else if numSteps != len(pegO) {
-			panic("Data with different number of steps has been loaded.")
-		}
-		adsOnStep := CalcAds(aus, pegO, boxz, number)
-		pro := float64(trueCount(adsOnStep)) / float64(len(adsOnStep)) * 100
-		name := getFileNameWithoutExt(file)
-		fmt.Println(name, pro, "%")
-		adsOnSteps[name] = adsOnStep
+	adsOnSteps, numOfStep, err := CalcAds(input, number)
+	if err != nil {
+		return err
 	}
-	x, y := numberOfAds(adsOnSteps, numSteps)
-	drawLine(
+
+	err = WriteAdsJson(adsOnSteps, number)
+
+	x, y := numberOfAds(numOfStep, adsOnSteps)
+
+	xr := []int{0, numOfStep}
+	yr := []int{0, len(adsOnSteps)}
+	opt := &option{
 		fmt.Sprintf("Number_of_adsorption_%d.png", number),
 		fmt.Sprintf("Time transition of adsorption number (adsorption condition %d)", number),
-		x,
-		y,
-		numSteps, len(adsOnSteps),
-	)
+	}
+
+	drawLine(x, y, xr, yr, opt)
+
 	return nil
 }
 
-func check(e error) {
-	if e != nil {
-		panic(e)
+func CalcAds(input string, number int) (map[string][]bool, int, error) {
+	jsonObj, err := fs.ReadJson(input)
+	if err != nil {
+		return nil, 0, err
 	}
+
+	aus, boxz, pegos, err := parseJson(jsonObj)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	pros := make([]float64, 0, len(pegos))
+	adsOnSteps := make(map[string][]bool)
+	numOfStep := 0
+
+	for name, pego := range pegos {
+		if numOfStep == 0 {
+			numOfStep = len(pego)
+		}
+
+		adsOnStep := calcAds(aus, pego, boxz, number)
+		adsOnSteps[name] = adsOnStep
+
+		pro := float64(trueCount(adsOnStep)) / float64(len(adsOnStep)) * 100
+		fmt.Println(name, pro, "%")
+
+		pros = append(pros, pro)
+	}
+	fmt.Println("mean: ", mean(pros))
+
+	return adsOnSteps, numOfStep, nil
 }
 
-func CalcAds(ausZ set.SetF, pegO [][]float64, boxZ float64, number int) []bool {
-	step := make([]bool, 0, len(pegO))
-	for _, pegOOnStep := range pegO {
-		adsFlag := false
+func WriteAdsJson(adsOnSteps map[string][]bool, number int) error {
+	adsFileName := AdsFileName(number)
+	adsStepJsonObj, err := json.Marshal(adsOnSteps)
+	if err != nil {
+		return err
+	}
+	err = fs.WriteJson(adsFileName, adsStepJsonObj)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func AdsFileName(number int) string {
+	return fmt.Sprintf("umx/adsStep%d.json", number)
+}
+
+func parseJson(obj interface{}) ([]float64, float64, map[string][][]float64, error) {
+	ausInterface, err := jsonpointer.Get(obj, "/aus")
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	aus, ok := ausInterface.([]float64)
+	if !ok {
+		return nil, 0, nil, fmt.Errorf("/aus is not []float64")
+	}
+
+	boxzInterface, err := jsonpointer.Get(obj, "/boxz")
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	boxz, ok := boxzInterface.(float64)
+	if !ok {
+		return nil, 0, nil, fmt.Errorf("/boxz is not float64")
+	}
+
+	pegosInterface, err := jsonpointer.Get(obj, "/pego")
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	pegos, ok := pegosInterface.(map[string][][]float64)
+	if !ok {
+		return nil, 0, nil, fmt.Errorf("/pego is not map[string][][]float64")
+	}
+
+	return aus, boxz, pegos, nil
+}
+
+func calcAds(aus []float64, pego [][]float64, boxZ float64, number int) []bool {
+	step := make([]bool, 0, len(pego))
+	for _, pegoOnStep := range pego {
+		isAds := false
 		counter := 0 // 吸着条件を満たしたO原子の数
-		for _, o := range pegOOnStep {
-			var lengthPerA []float64 // O原子との距離
-			for a := range ausZ {
+		for _, o := range pegoOnStep {
+			var lengthPegoAus []float64 // O原子との距離
+			for _, a := range aus {
 				l := math.Abs(o - a)
-				// PBC
-				if l > boxZ/2 {
+				if l > boxZ/2 { // PBC
 					l = boxZ - l
 				}
-				lengthPerA = append(lengthPerA, l)
+				lengthPegoAus = append(lengthPegoAus, l)
 			}
-			if min(lengthPerA) <= AdsRegion {
+			if min(lengthPegoAus) <= AdsRegion {
 				counter += 1
 				if counter >= number {
-					adsFlag = true
+					isAds = true
 					break
 				}
 			}
 		}
-		step = append(step, adsFlag)
+		step = append(step, isAds)
 	}
 	return step
 }
@@ -90,6 +156,14 @@ func min(s []float64) float64 {
 	return m
 }
 
+func mean(s []float64) float64 {
+	var sum float64
+	for _, v := range s {
+		sum += v
+	}
+	return sum / float64(len(s))
+}
+
 func trueCount(s []bool) int {
 	c := 0
 	for _, b := range s {
@@ -100,7 +174,7 @@ func trueCount(s []bool) int {
 	return c
 }
 
-func numberOfAds(datas map[string][]bool, numSteps int) ([]int, []int) {
+func numberOfAds(numSteps int, datas map[string][]bool) ([]int, []int) {
 	x := make([]int, numSteps)
 	for i := 0; i < numSteps; i++ {
 		x[i] = i
@@ -118,17 +192,18 @@ func numberOfAds(datas map[string][]bool, numSteps int) ([]int, []int) {
 	return x, y
 }
 
-func drawLine(filename, title string, x []int, y []int, xmax, ymax int) {
-	plot, _ := glot.NewPlot(2, false, false)
-	plot.AddPointGroup("Oxygen atoms in PEG", "lines", [][]int{x, y})
-	plot.SetTitle(title)
-	plot.SetXLabel("Steps")
-	plot.SetYLabel("Number of adsorptions")
-	plot.SetXrange(0, xmax)
-	plot.SetYrange(0, ymax)
-	plot.SavePlot(filename)
+type option struct {
+	filename string
+	title    string
 }
 
-func getFileNameWithoutExt(path string) string {
-	return filepath.Base(path[:len(path)-len(filepath.Ext(path))])
+func drawLine(x, y []int, xr, yr []int, opt *option) {
+	plot, _ := glot.NewPlot(2, false, false)
+	plot.AddPointGroup("Oxygen atoms in PEG", "lines", [][]int{x, y})
+	plot.SetTitle(opt.title)
+	plot.SetXLabel("{/Arial=30 Steps}")
+	plot.SetYLabel("{/Arial=30 Number of adsorptions}")
+	plot.SetXrange(xr[0], xr[1])
+	plot.SetYrange(yr[0], yr[1])
+	plot.SavePlot(opt.filename)
 }
