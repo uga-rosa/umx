@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/uga-rosa/umx/internal/adsp"
+	"github.com/uga-rosa/umx/internal/hist"
 	"github.com/uga-rosa/umx/internal/pp"
 	"github.com/uga-rosa/umx/internal/rg"
 	"github.com/urfave/cli/v2"
@@ -15,10 +16,10 @@ func main() {
 		Name:  "umx",
 		Usage: "To analyze the gromacs data.",
 		Commands: []*cli.Command{
-            {
-                Name: "pp",
-                Usage: "Putting the data into json",
-                Flags: []cli.Flag{
+			{
+				Name:  "pp",
+				Usage: "Putting the data into json",
+				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:     "input",
 						Aliases:  []string{"f"},
@@ -40,9 +41,9 @@ func main() {
 						Aliases: []string{"o"},
 						Value:   "pp.json",
 					},
-                },
+				},
 				Action: pp.Cmd,
-            },
+			},
 			{
 				Name:  "adsp",
 				Usage: "Calculate the adsorption probability and output a time transition graph of the number of adsorptions.",
@@ -78,6 +79,24 @@ func main() {
 					},
 				},
 				Action: rg.Cmd,
+			},
+			{
+				Name:  "hist",
+				Usage: "Draw a histogram from the merged Rg json file.",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "input",
+						Aliases:  []string{"f"},
+						Value:    "",
+						Required: true,
+					},
+					&cli.Int64Flag{
+						Name:    "number",
+						Aliases: []string{"n"},
+						Value:   1,
+					},
+				},
+				Action: hist.Cmd,
 			},
 		},
 	}

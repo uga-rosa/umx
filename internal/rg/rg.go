@@ -11,7 +11,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const bins = 100
+const Bins = 100
 
 func Cmd(c *cli.Context) error {
 	input := c.String("input")
@@ -27,16 +27,16 @@ func Cmd(c *cli.Context) error {
         return err
     }
 
-	adsHist, adsEdge, adsMean := Histogram(ads, bins)
-	nonHist, nonEdge, nonMean := Histogram(non, bins)
+	adsHist, adsEdge, adsMean := Histogram(ads, Bins)
+	nonHist, nonEdge, nonMean := Histogram(non, Bins)
 
 	xr := []float64{
 		math.Min(adsEdge[0], nonEdge[0]),
-		math.Max(adsEdge[bins], nonEdge[bins]),
+		math.Max(adsEdge[Bins], nonEdge[Bins]),
 	}
 
-	drawHist(adsMean, adsHist, xr, newOpt("ads", number))
-	drawHist(nonMean, nonHist, xr, newOpt("non", number))
+	DrawHist(adsMean, adsHist, xr, NewOpt("ads", number))
+	DrawHist(nonMean, nonHist, xr, NewOpt("non", number))
 
 	return nil
 }
@@ -132,21 +132,21 @@ func Histogram(data []float64, bin int) ([]float64, []float64, []float64) {
 	return hist, edge, mean
 }
 
-type option struct {
+type Option struct {
 	filename string
 	title    string
 	kind     string
 }
 
-func newOpt(kind string, number int) *option {
-	return &option{
+func NewOpt(kind string, number int) *Option {
+	return &Option{
 		fmt.Sprintf("Histogram_Rg_%s_%d.png", kind, number),
 		fmt.Sprintf("{/Arial=18 Histogram of Radius of Gyration of %s}", kind),
 		kind,
 	}
 }
 
-func drawHist(x []float64, y []float64, xr []float64, opt *option) {
+func DrawHist(x []float64, y []float64, xr []float64, opt *Option) {
 	plot, _ := glot.NewPlot(2, false, false)
 	plot.AddPointGroup(opt.kind, "lines", [][]float64{x, y})
 	plot.SetTitle(opt.title)
