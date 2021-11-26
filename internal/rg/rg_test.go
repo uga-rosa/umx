@@ -20,7 +20,7 @@ func TestHistogram(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		actualHist, actualEdge, actualMean := histogram(tt.input, tt.bin)
+		actualHist, actualEdge, actualMean := Histogram(tt.input, tt.bin)
 		testEqualFloatSlice(t, tt.expectedHist, actualHist)
 		testEqualFloatSlice(t, tt.expectedEdge, actualEdge)
 		testEqualFloatSlice(t, tt.expectedMean, actualMean)

@@ -1,33 +1,33 @@
 package pp
 
 import (
-	"encoding/json"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/mattn/go-jsonpointer"
 	"github.com/uga-rosa/umx/internal/fs"
 	"github.com/urfave/cli/v2"
 )
 
+const outputDir = "umx"
+
 func Cmd(c *cli.Context) error {
-	argInput := c.String("input")
-	argOutput := c.String("output")
-	argPego := c.String("pego")
-	argRg := c.String("rg")
+	input := c.String("input")
+	output := c.String("output")
+	pego := c.String("pego")
+	rg := c.String("rg")
 
-	var jsonObj interface{}
-	json.Unmarshal([]byte("{}"), &jsonObj)
+    jsonObj := &fs.JsonPP{}
 
-	aus, boxz, err := ReadAUSZ(argInput)
+	aus, boxz, err := ReadAUSZ(input)
 	if err != nil {
 		return err
 	}
-	jsonpointer.Set(jsonObj, "/aus", aus)
-	jsonpointer.Set(jsonObj, "/boxz", boxz)
+    jsonObj.Aus = aus
+    jsonObj.Boxz = boxz
 
-	pegoFiles, err := fs.GetFiles(argPego)
+	pegoFiles, err := fs.GetFiles(pego)
 	if err != nil {
 		return err
 	}
@@ -41,9 +41,9 @@ func Cmd(c *cli.Context) error {
 		name := fs.GetFileNameWithoutExt(path)
 		pegos[name] = pego
 	}
-	jsonpointer.Set(jsonObj, "/pego", pegos)
+    jsonObj.Pego = pegos
 
-	rgFiles, err := fs.GetFiles(argRg)
+	rgFiles, err := fs.GetFiles(rg)
 	if err != nil {
 		return err
 	}
@@ -57,9 +57,11 @@ func Cmd(c *cli.Context) error {
 		name := fs.GetFileNameWithoutExt(path)
 		rgs[name] = r
 	}
-	jsonpointer.Set(jsonObj, "/rg", rgs)
+    jsonObj.Rg = rgs
 
-	err = fs.WriteJson(argOutput, jsonObj)
+	os.MkdirAll(outputDir, 0755)
+
+	err = fs.WriteJson(outputDir+"/"+output, jsonObj)
 
 	return err
 }

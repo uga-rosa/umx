@@ -68,7 +68,7 @@ func main() {
 					&cli.StringFlag{
 						Name:     "input",
 						Aliases:  []string{"f"},
-						Value:    "",
+						Value:    "umx/pp.json",
 						Required: true,
 					},
 					&cli.Int64Flag{
